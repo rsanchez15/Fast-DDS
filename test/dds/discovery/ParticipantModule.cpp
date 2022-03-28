@@ -76,13 +76,38 @@ bool ParticipantModule::init()
         locator_server.port = unicast_metatraffic_port_;
         participant_qos.wire_protocol().builtin.metatrafficUnicastLocatorList.push_back(locator_server);
     }
-    participant_ = DomainParticipantFactory::get_instance()->create_participant(0, participant_qos, this);
+    participant_ = DomainParticipantFactory::get_instance()->create_participant(17, participant_qos, this);
 
     if (nullptr == participant_)
     {
         return false;
     }
     return true;
+}
+
+void ParticipantModule::on_subscriber_discovery(
+        DomainParticipant* participant,
+        fastrtps::rtps::ReaderDiscoveryInfo&& info)
+{
+    static_cast<void>(participant);
+
+    if (info.status != ReaderDiscoveryInfo::REMOVED_READER)
+    {
+        auto filter_info = info.info.content_filter();
+        if (0 < filter_info.filter_class_name.size())
+        {
+            std::cout << "Content filter discovered on reader " << info.info.guid() << ":" << std::endl;
+            std::cout << "  Filtered name:     " << filter_info.content_filtered_topic_name << std::endl;
+            std::cout << "  Related topic:     " << filter_info.related_topic_name << std::endl;
+            std::cout << "  Filter class:      " << filter_info.filter_class_name << std::endl;
+            std::cout << "  Filter expression: " << filter_info.filter_expression << std::endl;
+            std::cout << "  Filter parameters: " << filter_info.expression_parameters.size() << std::endl;
+            for (const auto& p : filter_info.expression_parameters)
+            {
+                std::cout << "    " << p << std::endl;
+            }
+        }
+    }
 }
 
 void ParticipantModule::on_participant_discovery(

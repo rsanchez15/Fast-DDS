@@ -48,6 +48,10 @@ public:
             DomainParticipant* participant,
             ParticipantDiscoveryInfo&& info) override;
 
+    void on_subscriber_discovery(
+            DomainParticipant* participant,
+            fastrtps::rtps::ReaderDiscoveryInfo&& info) override;
+
     bool init();
 
 private:
