@@ -88,9 +88,9 @@ bool RTPSMessageCreator::addSubmessageData(
     }
     inlineQosFlag = false;
     // cout << "expects inline qos: " << expectsInlineQos << " topic KIND: " << (topicKind == WITH_KEY) << endl;
-    if (inlineQos != NULL || expectsInlineQos || change->kind != ALIVE) //expects inline qos
+    if (nullptr != inlineQos || expectsInlineQos || change->kind != ALIVE) //expects inline qos
     {
-        if (topicKind == WITH_KEY)
+        if (WITH_KEY == topicKind || nullptr != inlineQos)
         {
             flags = flags | BIT(1);
             inlineQosFlag = true;
@@ -161,13 +161,12 @@ bool RTPSMessageCreator::addSubmessageData(
 
         if (topicKind == WITH_KEY)
         {
-            //cout << "ADDDING PARAMETER KEY " << endl;
             fastdds::dds::ParameterSerializer<Parameter_t>::add_parameter_key(msg, change->instanceHandle);
-        }
 
-        if (change->kind != ALIVE)
-        {
-            fastdds::dds::ParameterSerializer<Parameter_t>::add_parameter_status(msg, status);
+            if (change->kind != ALIVE)
+            {
+                fastdds::dds::ParameterSerializer<Parameter_t>::add_parameter_status(msg, status);
+            }
         }
 
         if (inlineQos != nullptr)
@@ -318,9 +317,9 @@ bool RTPSMessageCreator::addSubmessageDataFrag(
     }
 
     // cout << "expects inline qos: " << expectsInlineQos << " topic KIND: " << (topicKind == WITH_KEY) << endl;
-    if (inlineQos != NULL || expectsInlineQos || change->kind != ALIVE) //expects inline qos
+    if (nullptr != inlineQos || expectsInlineQos || change->kind != ALIVE) //expects inline qos
     {
-        if (topicKind == WITH_KEY)
+        if (WITH_KEY == topicKind || nullptr != inlineQos)
         {
             flags = flags | BIT(1);
             inlineQosFlag = true;
@@ -403,11 +402,11 @@ bool RTPSMessageCreator::addSubmessageDataFrag(
         if (topicKind == WITH_KEY)
         {
             fastdds::dds::ParameterSerializer<Parameter_t>::add_parameter_key(msg, change->instanceHandle);
-        }
 
-        if (change->kind != ALIVE)
-        {
-            fastdds::dds::ParameterSerializer<Parameter_t>::add_parameter_status(msg, status);
+            if (change->kind != ALIVE)
+            {
+                fastdds::dds::ParameterSerializer<Parameter_t>::add_parameter_status(msg, status);
+            }
         }
 
         if (inlineQos != nullptr)
