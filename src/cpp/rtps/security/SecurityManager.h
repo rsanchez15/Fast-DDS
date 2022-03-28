@@ -20,16 +20,17 @@
 
 #include <rtps/security/SecurityPluginFactory.h>
 
-#include <fastdds/rtps/security/authentication/Handshake.h>
-#include <fastdds/rtps/security/common/ParticipantGenericMessage.h>
-#include <fastdds/rtps/reader/ReaderListener.h>
-#include <fastdds/rtps/common/SequenceNumber.h>
-#include <fastdds/rtps/common/SerializedPayload.h>
+#include <fastdds/rtps/attributes/HistoryAttributes.h>
+#include <fastdds/rtps/builtin/data/ParticipantProxyData.h>
 #include <fastdds/rtps/builtin/data/ReaderProxyData.h>
 #include <fastdds/rtps/builtin/data/WriterProxyData.h>
-#include <fastdds/rtps/builtin/data/ParticipantProxyData.h>
-#include <fastdds/rtps/attributes/HistoryAttributes.h>
+#include <fastdds/rtps/common/SequenceNumber.h>
+#include <fastdds/rtps/common/SerializedPayload.h>
+#include <fastdds/rtps/reader/ReaderListener.h>
 #include <fastdds/rtps/resources/TimedEvent.h>
+#include <fastdds/rtps/security/authentication/Handshake.h>
+#include <fastdds/rtps/security/common/ParticipantGenericMessage.h>
+#include <fastrtps/utils/shared_mutex.hpp>
 
 #include <map>
 #include <mutex>
@@ -58,27 +59,72 @@ class Cryptography;
 struct ParticipantSecurityAttributes;
 struct EndpointSecurityAttributes;
 
+/**
+ * Class SecurityManager used to implemente the security handshake protocol.
+ *
+ * @ingroup SECURITY_MODULE
+ */
 class SecurityManager
 {
 public:
 
+    /**
+     * SecurityManager constructor
+     *
+     * @param participant RTPSParticipantImpl* references the associated participant
+     */
     SecurityManager(
             RTPSParticipantImpl* participant);
 
+    // @brief Destructor
     ~SecurityManager();
 
+    /**
+     * SecurityManager initialization
+     *
+     * @param attributes ParticipantSecurityAttributes references the plugin configuration
+     * @param participant_properties PropertyPolicy& references configuration provided on participant creation
+     * @param security_activated bool& set true if security is enabled
+     * @return true if the configuration is successfully applied (plugins creation and set up)
+     */
     bool init(
             ParticipantSecurityAttributes& attributes,
             const PropertyPolicy& participant_properties,
             bool& security_activated);
 
+    /**
+     * Creates all the security builtin endpoints
+     *
+     * @pre SecurityManager mutex shouldn't have been taken.
+     *
+     * @return true on successful creation
+     */
     bool create_entities();
 
+    /**
+     * @brief resource clean up
+     *
+     * @pre SecurityManager mutex shouldn't have been taken.
+     */
     void destroy();
 
+    /**
+     * Called from the discovery listener. Begins the security handshake of the security protocol.
+     *
+     * @pre SecurityManager mutex shouldn't have been taken.
+     * @param participant_data ParticipantProxyData& references the participant proxy
+     * @return true on success
+     */
     bool discovered_participant(
             const ParticipantProxyData& participant_data);
 
+    /**
+     * Called from the discovery listener. Frees all the resources associated to a demise participant.
+     *
+     * @pre SecurityManager mutex shouldn't have been taken.
+     * @param participant_data ParticipantProxyData& references the participant proxy
+     * @return true on success
+     */
     void remove_participant(
             const ParticipantProxyData& participant_data);
 
@@ -148,21 +194,55 @@ public:
             const PropertyPolicy& reader_properties,
             EndpointSecurityAttributes& security_attributes);
 
+    /**
+     * Returns a handle to the identity token used in handshake
+     *
+     * @pre SecurityManager mutex shouldn't have been taken with exclusive ownership.
+     * @param identity_token IdentityToken** handle reference to set
+     * @return true on successful retrieval
+     */
     bool get_identity_token(
             IdentityToken** identity_token);
 
+    /**
+     * Releases a handle to the identity token used in handshake
+     *
+     * @pre SecurityManager mutex shouldn't have been taken with exclusive ownership.
+     * @param identity_token IdentityToken* handle reference to release
+     * @return true on successful disposal
+     */
     bool return_identity_token(
             IdentityToken* identity_token);
 
+    /**
+     * Returns a handle to the permision token used in handshake
+     *
+     * @pre SecurityManager mutex shouldn't have been taken with exclusive ownership.
+     * @param permissions_token PermissionsToken** handle reference to set
+     * @return true on successful retrieval
+     */
     bool get_permissions_token(
             PermissionsToken** permissions_token);
 
+    /**
+     * Releases a handle to the permissions token used in handshake
+     *
+     * @pre SecurityManager mutex shouldn't have been taken with exclusive ownership.
+     * @param permissions_token PermissionsToken* handle reference to release
+     * @return true on successful disposal
+     */
     bool return_permissions_token(
             PermissionsToken* permissions_token);
 
+    /**
+     * Returns a mask of available security builtin endpoints
+     *
+     * @pre SecurityManager mutex shouldn't have been taken with exclusive ownership.
+     * @return mask
+     */
     uint32_t builtin_endpoints();
 
-    RTPSParticipantImpl* participant()
+    RTPSParticipantImpl* participant() const
     {
         return participant_;
     }
@@ -170,48 +250,48 @@ public:
     bool encode_rtps_message(
             const CDRMessage_t& input_message,
             CDRMessage_t& output_message,
-            const std::vector<GuidPrefix_t>& receiving_list);
+            const std::vector<GuidPrefix_t>& receiving_list) const;
 
     int decode_rtps_message(
             const CDRMessage_t& message,
             CDRMessage_t& out_message,
-            const GuidPrefix_t& sending_participant);
+            const GuidPrefix_t& sending_participant) const;
 
     bool encode_writer_submessage(
             const CDRMessage_t& input_message,
             CDRMessage_t& output_message,
             const GUID_t& writer_guid,
-            const std::vector<GUID_t>& receiving_list);
+            const std::vector<GUID_t>& receiving_list) const;
 
     bool encode_reader_submessage(
             const CDRMessage_t& input_message,
             CDRMessage_t& output_message,
             const GUID_t& reader_guid,
-            const std::vector<GUID_t>& receiving_list);
+            const std::vector<GUID_t>& receiving_list) const;
 
     int decode_rtps_submessage(
             CDRMessage_t& message,
             CDRMessage_t& out_message,
-            const GuidPrefix_t& sending_participant);
+            const GuidPrefix_t& sending_participant) const;
 
     bool encode_serialized_payload(
             const SerializedPayload_t& payload,
             SerializedPayload_t& output_payload,
-            const GUID_t& writer_guid);
+            const GUID_t& writer_guid) const;
 
     bool decode_serialized_payload(
             const SerializedPayload_t& secure_payload,
             SerializedPayload_t& payload,
             const GUID_t& reader_guid,
-            const GUID_t& writer_guid);
+            const GUID_t& writer_guid) const;
 
-    uint32_t calculate_extra_size_for_rtps_message();
+    uint32_t calculate_extra_size_for_rtps_message() const;
 
     uint32_t calculate_extra_size_for_rtps_submessage(
-            const GUID_t& writer_guid);
+            const GUID_t& writer_guid) const;
 
     uint32_t calculate_extra_size_for_encoded_payload(
-            const GUID_t& writer_guid);
+            const GUID_t& writer_guid) const;
 
 private:
 
@@ -300,55 +380,65 @@ private:
 
         AuthUniquePtr get_auth()
         {
+            std::lock_guard<std::mutex> g(mtx_);
             return std::move(auth_);
         }
 
         void set_auth(
                 AuthUniquePtr& auth)
         {
+            std::lock_guard<std::mutex> g(mtx_);
             auth_ = std::move(auth);
         }
 
         void set_shared_secret(
                 SharedSecretHandle* shared_secret)
         {
+            std::lock_guard<std::mutex> g(mtx_);
             shared_secret_handle_ = shared_secret;
         }
 
         SharedSecretHandle* get_shared_secret()
         {
+            std::lock_guard<std::mutex> g(mtx_);
             return shared_secret_handle_;
         }
 
         void set_permissions_handle(
                 PermissionsHandle* handle)
         {
+            std::lock_guard<std::mutex> g(mtx_);
             permissions_handle_ = handle;
         }
 
         PermissionsHandle* get_permissions_handle()
         {
+            std::lock_guard<std::mutex> g(mtx_);
             return permissions_handle_;
         }
 
         const PermissionsHandle* get_permissions_handle() const
         {
+            std::lock_guard<std::mutex> g(mtx_);
             return permissions_handle_;
         }
 
         void set_participant_crypto(
                 ParticipantCryptoHandle* participant_crypto)
         {
+            std::lock_guard<std::mutex> g(mtx_);
             participant_crypto_ = participant_crypto;
         }
 
         ParticipantCryptoHandle* get_participant_crypto()
         {
+            std::lock_guard<std::mutex> g(mtx_);
             return participant_crypto_;
         }
 
         const ParticipantProxyData& participant_data() const
         {
+            std::lock_guard<std::mutex> g(mtx_);
             return participant_data_;
         }
 
@@ -356,6 +446,8 @@ private:
 
         DiscoveredParticipantInfo(
                 const DiscoveredParticipantInfo& info) = delete;
+
+        std::mutex mtx_;
 
         AuthUniquePtr auth_;
 
@@ -425,13 +517,34 @@ private:
 
     void cancel_init();
 
+    /**
+     * Releases resources associated to another secured participant discovered.
+     *
+     * @pre SecurityManager mutex should have been taken for shared access.
+     *      DiscoveryParticipantInfo state is atomic due to the use of AuthUniquePtr.
+     *
+     * @param auth_ptr DiscoveredParticipantInfo::AuthUniquePtr& remote participant info to release.
+     */
     void remove_discovered_participant_info(
             const DiscoveredParticipantInfo::AuthUniquePtr& auth_ptr);
 
+    /**
+     * Sets the specified info for a remote participant
+     *
+     * @pre SecurityManager mutex should not have been taken yet.
+     *
+     * @param remote_participant_key GUID_t& reference to the participant to update
+     * @param auth_ptr DiscoveredParticipantInfo::AuthUniquePtr& remote participant info to set.
+     */
     bool restore_discovered_participant_info(
             const GUID_t& remote_participant_key,
             DiscoveredParticipantInfo::AuthUniquePtr& auth_ptr);
 
+    /**
+     * Deletes all the security builtin endpoints
+     *
+     * @pre SecurityManager mutex should have been taken as exclusive ownership.
+     */
     void delete_entities();
     bool create_participant_stateless_message_entities();
     void delete_participant_stateless_message_entities();
@@ -464,12 +577,30 @@ private:
             const EndpointSecurityAttributes& security_attributes,
             bool is_builtin);
 
+    /**
+     * Match builtin endpoints with those of a remote participant
+     *
+     * @pre SecurityManager mutex shouldn't have been taken with exclusive ownership.
+     * @param participant_data ParticipantProxyData& remote participant proxy
+     */
     void match_builtin_endpoints(
             const ParticipantProxyData& participant_data);
 
+    /**
+     * Match builtin endpoints devoted to key exchanges with those of a remote participant
+     *
+     * @pre SecurityManager mutex shouldn't have been taken with exclusive ownership.
+     * @param participant_data ParticipantProxyData& remote participant proxy
+     */
     void match_builtin_key_exchange_endpoints(
             const ParticipantProxyData& participant_data);
 
+    /**
+     * Unmatch builtin endpoints with those of a remote participant
+     *
+     * @pre SecurityManager mutex shouldn't have been taken with exclusive ownership.
+     * @param participant_data ParticipantProxyData& remote participant proxy
+     */
     void unmatch_builtin_endpoints(
             const ParticipantProxyData& participant_data);
 
@@ -477,6 +608,13 @@ private:
             IdentityHandle& remote_participant_identity,
             SharedSecretHandle& shared_secret);
 
+    /**
+     * Manage cryptographic exchange with a remote participant
+     *
+     * @pre SecurityManager mutex shouldn't have been taken with exclusive ownership.
+     * @param remote_participant_crypto ParticipantCryptoHandle* handle to cryptographic data
+     * @param remote_participant_guid GUID_t& remote participant id
+     */
     void exchange_participant_crypto(
             ParticipantCryptoHandle* remote_participant_crypto,
             const GUID_t& remote_participant_guid);
@@ -487,6 +625,17 @@ private:
     void process_participant_volatile_message_secure(
             const CacheChange_t* const change);
 
+    /**
+     * Called from the discovery listener and security builitin listeners.
+     * Implements security protocol handshake logic state machine.
+     *
+     * @pre SecurityManager mutex shouldn't have been taken.
+     * @param participant_data ParticipantProxyData& exchange partner
+     * @param remote_participant_info DiscoveredParticipantInfo::AuthUniquePtr& exchange partner authorization data
+     * @param message_identity MessageIdentity&& identifies the message to process
+     * @param message HandshakeMessageToken&& required by the protocol
+     * @return true on success
+     */
     bool on_process_handshake(
             const ParticipantProxyData& participant_data,
             DiscoveredParticipantInfo::AuthUniquePtr& remote_participant_info,
@@ -496,23 +645,23 @@ private:
     ParticipantGenericMessage generate_authentication_message(
             const MessageIdentity& related_message_identity,
             const GUID_t& destination_participant_key,
-            HandshakeMessageToken& handshake_message);
+            HandshakeMessageToken& handshake_message) const;
 
     ParticipantGenericMessage generate_participant_crypto_token_message(
             const GUID_t& destination_participant_key,
-            ParticipantCryptoTokenSeq& crypto_tokens);
+            ParticipantCryptoTokenSeq& crypto_tokens) const;
 
     ParticipantGenericMessage generate_writer_crypto_token_message(
             const GUID_t& destination_participant_key,
             const GUID_t& destination_endpoint_key,
             const GUID_t& source_endpoint_key,
-            ParticipantCryptoTokenSeq& crypto_tokens);
+            ParticipantCryptoTokenSeq& crypto_tokens) const;
 
     ParticipantGenericMessage generate_reader_crypto_token_message(
             const GUID_t& destination_participant_key,
             const GUID_t& destination_endpoint_key,
             const GUID_t& source_endpoint_key,
-            ParticipantCryptoTokenSeq& crypto_tokens);
+            ParticipantCryptoTokenSeq& crypto_tokens) const;
 
     bool participant_authorized(
             const ParticipantProxyData& participant_data,
@@ -520,7 +669,7 @@ private:
             SharedSecretHandle* shared_secret_handle);
 
     void resend_handshake_message_token(
-            const GUID_t& remote_participant_key);
+            const GUID_t& remote_participant_key) const;
 
     RTPSParticipantImpl* participant_;
     StatelessWriter* participant_stateless_message_writer_;
@@ -533,27 +682,27 @@ private:
     ReaderHistory* participant_volatile_message_secure_reader_history_;
     SecurityPluginFactory factory_;
 
-    Logging* logging_plugin_;
+    std::unique_ptr<Logging> logging_plugin_;
 
-    Authentication* authentication_plugin_;
+    std::unique_ptr<Authentication> authentication_plugin_;
 
-    AccessControl* access_plugin_;
+    std::unique_ptr<AccessControl> access_plugin_;
 
-    Cryptography* crypto_plugin_;
+    std::unique_ptr<Cryptography> crypto_plugin_;
 
     uint32_t domain_id_;
 
-    IdentityHandle* local_identity_handle_;
+    std::unique_ptr<IdentityHandle> local_identity_handle_;
 
-    PermissionsHandle* local_permissions_handle_;
+    std::unique_ptr<PermissionsHandle> local_permissions_handle_;
 
-    ParticipantCryptoHandle* local_participant_crypto_handle_;
+    std::unique_ptr<ParticipantCryptoHandle> local_participant_crypto_handle_;
 
     std::map<GUID_t, DiscoveredParticipantInfo> discovered_participants_;
 
     GUID_t auth_source_guid;
 
-    std::mutex mutex_;
+    eprosima::shared_mutex mutex_;
 
     std::atomic<int64_t> auth_last_sequence_number_;
 
