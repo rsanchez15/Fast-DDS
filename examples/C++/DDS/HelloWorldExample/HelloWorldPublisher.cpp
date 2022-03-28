@@ -25,6 +25,7 @@
 #include <fastdds/dds/publisher/qos/PublisherQos.hpp>
 #include <fastdds/dds/publisher/DataWriter.hpp>
 #include <fastdds/dds/publisher/qos/DataWriterQos.hpp>
+#include <fastdds/rtps/transport/UDPv4TransportDescriptor.h>
 
 #include <thread>
 
@@ -45,6 +46,9 @@ bool HelloWorldPublisher::init()
     hello_.message("HelloWorld");
     DomainParticipantQos pqos;
     pqos.name("Participant_pub");
+    pqos.transport().use_builtin_transports = false;
+    auto udp_transport = std::make_shared<eprosima::fastdds::rtps::UDPv4TransportDescriptor>();
+    pqos.transport().user_transports.push_back(udp_transport);
     participant_ = DomainParticipantFactory::get_instance()->create_participant(0, pqos);
 
     if (participant_ == nullptr)

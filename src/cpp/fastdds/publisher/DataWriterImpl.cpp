@@ -45,6 +45,7 @@
 #include <fastdds/core/condition/StatusConditionImpl.hpp>
 #include <fastdds/core/policy/ParameterSerializer.hpp>
 #include <fastdds/core/policy/QosPolicyUtils.hpp>
+#include <fastdds/core/policy/QosPoliciesSerializer.hpp>
 
 #include <fastdds/domain/DomainParticipantImpl.hpp>
 
@@ -737,6 +738,14 @@ ReturnCode_t DataWriterImpl::perform_create_new_change(
     {
         payload.move_into_change(*ch);
 
+        const auto& reliability = qos_.reliability();
+        auto qos_size = QosPoliciesSerializer<ReliabilityQosPolicy>::cdr_serialized_size(reliability);
+        ch->inline_qos.reserve(qos_size);
+        CDRMessage_t msg(ch->inline_qos);
+        msg.length = 0;
+        msg.pos = 0;
+        QosPoliciesSerializer<ReliabilityQosPolicy>::add_to_cdr_message(qos_.reliability(), &msg);
+        ch->inline_qos.length = msg.length;
         if (!this->history_.add_pub_change(ch, wparams, lock, max_blocking_time))
         {
             if (was_loaned)
