@@ -1,6 +1,7 @@
 name: Thread Sanitizer analysis
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - 'feature/tsan/fixes'
