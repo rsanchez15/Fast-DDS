@@ -1,0 +1,9 @@
+name: Thread Sanitizer analysis
+
+on:
+  push:
+    branches:
+      - 'feature/tsan/fixes'
+  pull_request:
+    branches:
+      - 'feature/tsan/fixes'
