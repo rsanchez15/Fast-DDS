@@ -162,12 +162,9 @@ ParticipantProxyData* PDPClient::createParticipantProxyData(
         }
     }
 
-    ParticipantProxyData* pdata = add_participant_proxy_data(participant_data.m_guid, is_server);
+    ParticipantProxyData* pdata = add_participant_proxy_data(participant_data.m_guid, is_server, &participant_data);
     if (pdata != nullptr)
     {
-        pdata->copy(participant_data);
-        pdata->isAlive = true;
-
         // Clients only assert its server lifeliness, other clients liveliness is provided
         // through server's PDP discovery data
         if (is_server)
@@ -413,7 +410,7 @@ void PDPClient::announceParticipantState(
         bool dispose,
         WriteParams& )
 {
-    if (enable_)
+    if (enabled_)
     {
         /*
            Protect writer sequence number. Make sure in order to prevent AB BA deadlock that the

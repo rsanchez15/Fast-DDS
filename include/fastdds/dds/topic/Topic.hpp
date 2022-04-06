@@ -45,7 +45,7 @@ class DomainParticipantImpl;
 class TopicImpl;
 
 /**
- * Class TopicDescription, represents the fact that both publications
+ * Class Topic, represents the fact that both publications
  * and subscriptions are tied to a single data-type
  *
  * @ingroup FASTDDS_MODULE
@@ -59,13 +59,13 @@ class Topic : public DomainEntity, public TopicDescription
      * Create a topic, assigning its pointer to the associated implementation.
      * Don't use directly, create Topic using create_topic from DomainParticipant.
      */
-    RTPS_DllAPI Topic(
+    Topic(
             const std::string& topic_name,
             const std::string& type_name,
             TopicImpl* p,
             const StatusMask& mask = StatusMask::all());
 
-    RTPS_DllAPI Topic(
+    Topic(
             DomainParticipant* dp,
             const std::string& topic_name,
             const std::string& type_name,
@@ -75,10 +75,7 @@ class Topic : public DomainEntity, public TopicDescription
 
 public:
 
-    /**
-     * @brief Destructor
-     */
-    RTPS_DllAPI virtual ~Topic();
+    virtual ~Topic();
 
     /**
      * @brief Getter for the DomainParticipant
@@ -142,11 +139,6 @@ public:
             TopicListener* listener,
             const StatusMask& mask = StatusMask::all());
 
-    /**
-     * @brief Getter for the TopicDescriptionImpl
-     *
-     * @return pointer to TopicDescriptionImpl
-     */
     TopicDescriptionImpl* get_impl() const override;
 
 protected:

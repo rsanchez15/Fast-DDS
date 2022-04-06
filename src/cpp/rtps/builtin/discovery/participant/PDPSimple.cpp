@@ -128,6 +128,8 @@ bool PDPSimple::init(
         if (!mp_EDP->initEDP(m_discovery))
         {
             logError(RTPS_PDP, "Endpoint discovery configuration failed");
+            delete mp_EDP;
+            mp_EDP = nullptr;
             return false;
         }
     }
@@ -137,6 +139,8 @@ bool PDPSimple::init(
         if (!mp_EDP->initEDP(m_discovery))
         {
             logError(RTPS_PDP, "Endpoint discovery configuration failed");
+            delete mp_EDP;
+            mp_EDP = nullptr;
             return false;
         }
     }
@@ -189,11 +193,9 @@ ParticipantProxyData* PDPSimple::createParticipantProxyData(
         }
     }
 
-    ParticipantProxyData* pdata = add_participant_proxy_data(participant_data.m_guid, true);
+    ParticipantProxyData* pdata = add_participant_proxy_data(participant_data.m_guid, true, &participant_data);
     if (pdata != nullptr)
     {
-        pdata->copy(participant_data);
-        pdata->isAlive = true;
         pdata->lease_duration_event->update_interval(pdata->m_leaseDuration);
         pdata->lease_duration_event->restart_timer();
     }
@@ -212,7 +214,7 @@ void PDPSimple::announceParticipantState(
         bool dispose,
         WriteParams& wp)
 {
-    if (enable_)
+    if (enabled_)
     {
         PDP::announceParticipantState(new_change, dispose, wp);
 

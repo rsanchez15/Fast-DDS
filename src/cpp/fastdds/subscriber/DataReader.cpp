@@ -262,6 +262,11 @@ const GUID_t& DataReader::guid()
     return impl_->guid();
 }
 
+const GUID_t& DataReader::guid() const
+{
+    return impl_->guid();
+}
+
 InstanceHandle_t DataReader::get_instance_handle() const
 {
     return impl_->get_instance_handle();
@@ -375,7 +380,7 @@ ReturnCode_t DataReader::get_matched_publication_data(
 }
 
 ReturnCode_t DataReader::get_matched_publications(
-        std::vector<fastrtps::rtps::InstanceHandle_t>& publication_handles) const
+        std::vector<InstanceHandle_t>& publication_handles) const
 {
     static_cast<void> (publication_handles);
     return ReturnCode_t::RETCODE_UNSUPPORTED;

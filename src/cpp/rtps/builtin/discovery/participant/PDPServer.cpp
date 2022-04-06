@@ -206,11 +206,9 @@ ParticipantProxyData* PDPServer::createParticipantProxyData(
         }
     }
 
-    ParticipantProxyData* pdata = add_participant_proxy_data(participant_data.m_guid, do_lease);
+    ParticipantProxyData* pdata = add_participant_proxy_data(participant_data.m_guid, do_lease, &participant_data);
     if (pdata != nullptr)
     {
-        pdata->copy(participant_data);
-        pdata->isAlive = true;
         if (do_lease)
         {
             pdata->lease_duration_event->update_interval(pdata->m_leaseDuration);
@@ -323,7 +321,7 @@ bool PDPServer::createPDPEndpoints()
     {
         // Set pdp filter to writer
         IReaderDataFilter* pdp_filter = static_cast<ddb::PDPDataFilter<ddb::DiscoveryDataBase>*>(&discovery_db_);
-        static_cast<StatefulWriter*>(mp_PDPWriter)->reader_data_filter(pdp_filter);
+        mp_PDPWriter->reader_data_filter(pdp_filter);
         // Enable separate sending so the filter can be called for each change and reader proxy
         mp_PDPWriter->set_separate_sending(true);
 
@@ -540,7 +538,7 @@ void PDPServer::announceParticipantState(
         bool dispose /* = false */,
         WriteParams& )
 {
-    if (enable_)
+    if (enabled_)
     {
         logInfo(RTPS_PDP_SERVER,
                 "Announcing Server " << mp_RTPSParticipant->getGuid() << " (new change: " << new_change << ")");

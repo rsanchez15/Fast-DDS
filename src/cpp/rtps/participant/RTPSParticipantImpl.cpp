@@ -28,6 +28,7 @@
 #include <fastdds/dds/log/Log.hpp>
 #include <fastdds/rtps/attributes/ServerAttributes.h>
 #include <fastdds/rtps/builtin/BuiltinProtocols.h>
+#include <fastdds/rtps/builtin/discovery/endpoint/EDP.h>
 #include <fastdds/rtps/builtin/discovery/participant/PDPSimple.h>
 #include <fastdds/rtps/builtin/data/ParticipantProxyData.h>
 #include <fastdds/rtps/builtin/liveliness/WLP.h>
@@ -324,10 +325,8 @@ RTPSParticipantImpl::RTPSParticipantImpl(
 
 #if HAVE_SECURITY
     // Start security
-    // TODO(Ricardo) Get returned value in future.
-    m_security_manager_initialized = m_security_manager.init(security_attributes_, PParam.properties,
-                    m_is_security_active);
-    if (!m_security_manager_initialized)
+    if (!m_security_manager.init(security_attributes_, PParam.properties,
+            m_is_security_active))
     {
         // Participant will be deleted, no need to allocate buffers or create builtin endpoints
         return;
@@ -397,7 +396,6 @@ RTPSParticipantImpl::RTPSParticipantImpl(
         if (!m_is_security_active)
         {
             // Participant will be deleted, no need to create builtin endpoints
-            m_security_manager_initialized = false;
             return;
         }
     }
@@ -409,6 +407,7 @@ RTPSParticipantImpl::RTPSParticipantImpl(
     if (!mp_builtinProtocols->initBuiltinProtocols(this, m_att.builtin))
     {
         logError(RTPS_PARTICIPANT, "The builtin protocols were not correctly initialized");
+        return;
     }
 
     if (c_GuidPrefix_Unknown != persistence_guid)
@@ -421,6 +420,8 @@ RTPSParticipantImpl::RTPSParticipantImpl(
         logInfo(RTPS_PARTICIPANT,
                 "RTPSParticipant \"" << m_att.getName() << "\" with guidPrefix: " << m_guid.guidPrefix);
     }
+
+    initialized_ = true;
 }
 
 RTPSParticipantImpl::RTPSParticipantImpl(
@@ -1171,9 +1172,10 @@ bool RTPSParticipantImpl::registerWriter(
 bool RTPSParticipantImpl::registerReader(
         RTPSReader* reader,
         const TopicAttributes& topicAtt,
-        const ReaderQos& rqos)
+        const ReaderQos& rqos,
+        const fastdds::rtps::ContentFilterProperty* content_filter)
 {
-    return this->mp_builtinProtocols->addLocalReader(reader, topicAtt, rqos);
+    return this->mp_builtinProtocols->addLocalReader(reader, topicAtt, rqos, content_filter);
 }
 
 void RTPSParticipantImpl::update_attributes(
@@ -1211,18 +1213,19 @@ void RTPSParticipantImpl::update_attributes(
             || update_pdp)
     {
         update_pdp = true;
-        // Check that the remote servers list is consistent: all the already known remote servers must be included in the
-        // list and only new remote servers can be added.
+        std::vector<GUID_t> modified_servers;
+        // Check that the remote servers list is consistent: all the already known remote servers must be included in
+        // the list and either new remote servers are added or remote server listening locator is modified.
         for (auto existing_server : m_att.builtin.discovery_config.m_DiscoveryServers)
         {
             bool contained = false;
-            bool locator_contained = false;
             for (auto incoming_server : patt.builtin.discovery_config.m_DiscoveryServers)
             {
                 if (existing_server.guidPrefix == incoming_server.guidPrefix)
                 {
                     for (auto incoming_locator : incoming_server.metatrafficUnicastLocatorList)
                     {
+                        bool locator_contained = false;
                         for (auto existing_locator : existing_server.metatrafficUnicastLocatorList)
                         {
                             if (incoming_locator == existing_locator)
@@ -1233,10 +1236,10 @@ void RTPSParticipantImpl::update_attributes(
                         }
                         if (!locator_contained)
                         {
-                            logWarning(RTPS_QOS_CHECK,
-                                    "Discovery Servers cannot add/modify their locators: " << incoming_locator <<
-                                    " has not been added")
-                            return;
+                            modified_servers.emplace_back(incoming_server.GetParticipant());
+                            logInfo(RTPS_QOS_CHECK,
+                                    "DS Server: " << incoming_server.guidPrefix << " has modified its locators: "
+                                                  << incoming_locator << " being added")
                         }
                     }
                     contained = true;
@@ -1287,7 +1290,7 @@ void RTPSParticipantImpl::update_attributes(
                     m_att.builtin.discovery_config.discoveryProtocol == DiscoveryProtocol::SERVER ||
                     m_att.builtin.discovery_config.discoveryProtocol == DiscoveryProtocol::BACKUP)
             {
-                // Add incoming servers iff we don't know about them already
+                // Add incoming servers iff we don't know about them already or the listening locator has been modified
                 for (auto incoming_server : patt.builtin.discovery_config.m_DiscoveryServers)
                 {
                     eprosima::fastdds::rtps::RemoteServerList_t::iterator server_it;
@@ -1296,7 +1299,22 @@ void RTPSParticipantImpl::update_attributes(
                     {
                         if (server_it->guidPrefix == incoming_server.guidPrefix)
                         {
-                            break;
+                            bool modified_locator = false;
+                            // Check if the listening locators have been modified
+                            for (auto guid : modified_servers)
+                            {
+                                if (guid == incoming_server.GetParticipant())
+                                {
+                                    modified_locator = true;
+                                    server_it->metatrafficUnicastLocatorList =
+                                            incoming_server.metatrafficUnicastLocatorList;
+                                    break;
+                                }
+                            }
+                            if (false == modified_locator)
+                            {
+                                break;
+                            }
                         }
                     }
                     if (server_it == m_att.builtin.discovery_config.m_DiscoveryServers.end())
@@ -1314,6 +1332,11 @@ void RTPSParticipantImpl::update_attributes(
                 {
                     fastdds::rtps::PDPServer* pdp_server = static_cast<fastdds::rtps::PDPServer*>(pdp);
                     pdp_server->update_remote_servers_list();
+                    for (auto remote_server : modified_servers)
+                    {
+                        pdp_server->remove_remote_participant(remote_server,
+                                ParticipantDiscoveryInfo::DISCOVERY_STATUS::DROPPED_PARTICIPANT);
+                    }
                 }
                 // Notify PDPClient
                 else if (m_att.builtin.discovery_config.discoveryProtocol == DiscoveryProtocol::CLIENT ||
@@ -1321,6 +1344,11 @@ void RTPSParticipantImpl::update_attributes(
                 {
                     fastdds::rtps::PDPClient* pdp_client = static_cast<fastdds::rtps::PDPClient*>(pdp);
                     pdp_client->update_remote_servers_list();
+                    for (auto remote_server : modified_servers)
+                    {
+                        pdp_client->remove_remote_participant(remote_server,
+                                ParticipantDiscoveryInfo::DISCOVERY_STATUS::DROPPED_PARTICIPANT);
+                    }
                 }
             }
         }
@@ -1344,9 +1372,10 @@ bool RTPSParticipantImpl::updateLocalWriter(
 bool RTPSParticipantImpl::updateLocalReader(
         RTPSReader* reader,
         const TopicAttributes& topicAtt,
-        const ReaderQos& rqos)
+        const ReaderQos& rqos,
+        const fastdds::rtps::ContentFilterProperty* content_filter)
 {
-    return this->mp_builtinProtocols->updateLocalReader(reader, topicAtt, rqos);
+    return this->mp_builtinProtocols->updateLocalReader(reader, topicAtt, rqos, content_filter);
 }
 
 /*
@@ -1916,7 +1945,7 @@ bool RTPSParticipantImpl::pairing_remote_writer_with_local_reader_after_security
 bool RTPSParticipantImpl::is_security_enabled_for_writer(
         const WriterAttributes& writer_attributes)
 {
-    if (!is_security_initialized() || !is_secure())
+    if (!is_initialized() || !is_secure())
     {
         return false;
     }
@@ -1939,7 +1968,7 @@ bool RTPSParticipantImpl::is_security_enabled_for_writer(
 bool RTPSParticipantImpl::is_security_enabled_for_reader(
         const ReaderAttributes& reader_attributes)
 {
-    if (!is_security_initialized() || !is_secure())
+    if (!is_initialized() || !is_secure())
     {
         return false;
     }

@@ -56,6 +56,14 @@ if(MSVC OR MSVC_IDE)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${EPROSIMA_EXTRA_CMAKE_CXX_FLAGS}")
     endif()
 
+    # make visual studio more gcc and clang like.
+    # C4101 'identifier' : unreferenced local variable 
+    # C4189 'identifier' : local variable is initialized but not referenced
+    # C4555  expression has no effect; expected expression with side-effect
+    # C4715: 'Test': not all control paths return a value
+    # C5038 data member 'member1' will be initialized after data member 'member2'
+    add_compile_options(/w34101 /w34189 /w34555 /w34715 /w35038)
+
     if(EPROSIMA_BUILD)
         string(REPLACE "/DNDEBUG" "" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
     endif()
@@ -97,8 +105,19 @@ check_endianness()
 ###############################################################################
 # Installation paths
 ###############################################################################
+option(APPEND_PROJECT_NAME_TO_INCLUDEDIR
+  "When ON headers are installed to a path ending with a folder called \
+  ${PROJECT_NAME}. This avoids include directory search order issues when \
+  overriding this package from a merged catkin, ament, or colcon workspace."
+  OFF)
+
 set(BIN_INSTALL_DIR bin/ CACHE PATH "Installation directory for binaries")
-set(INCLUDE_INSTALL_DIR include/ CACHE PATH "Installation directory for C++ headers")
+set(_include_dir "include/")
+if(APPEND_PROJECT_NAME_TO_INCLUDEDIR)
+  string(APPEND _include_dir "${PROJECT_NAME}/")
+endif()
+set(INCLUDE_INSTALL_DIR "${_include_dir}" CACHE PATH "Installation directory for C++ headers")
+unset(_include_dir)
 set(LIB_INSTALL_DIR lib/ CACHE PATH "Installation directory for libraries")
 set(DATA_INSTALL_DIR share/ CACHE PATH "Installation directory for data")
 if(WIN32)

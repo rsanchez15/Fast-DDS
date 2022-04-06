@@ -129,6 +129,8 @@ bool BuiltinProtocols::initBuiltinProtocols(
     if (!mp_PDP->init(mp_participantImpl))
     {
         logError(RTPS_PDP, "Participant discovery configuration failed");
+        delete mp_PDP;
+        mp_PDP = nullptr;
         return false;
     }
 
@@ -212,12 +214,13 @@ bool BuiltinProtocols::addLocalWriter(
 bool BuiltinProtocols::addLocalReader(
         RTPSReader* R,
         const fastrtps::TopicAttributes& topicAtt,
-        const fastrtps::ReaderQos& rqos)
+        const fastrtps::ReaderQos& rqos,
+        const fastdds::rtps::ContentFilterProperty* content_filter)
 {
     bool ok = false;
     if (mp_PDP != nullptr)
     {
-        ok |= mp_PDP->getEDP()->newLocalReaderProxyData(R, topicAtt, rqos);
+        ok |= mp_PDP->getEDP()->newLocalReaderProxyData(R, topicAtt, rqos, content_filter);
     }
     else
     {
@@ -246,12 +249,13 @@ bool BuiltinProtocols::updateLocalWriter(
 bool BuiltinProtocols::updateLocalReader(
         RTPSReader* R,
         const TopicAttributes& topicAtt,
-        const ReaderQos& rqos)
+        const ReaderQos& rqos,
+        const fastdds::rtps::ContentFilterProperty* content_filter)
 {
     bool ok = false;
     if (mp_PDP != nullptr && mp_PDP->getEDP() != nullptr)
     {
-        ok |= mp_PDP->getEDP()->updatedLocalReader(R, topicAtt, rqos);
+        ok |= mp_PDP->getEDP()->updatedLocalReader(R, topicAtt, rqos, content_filter);
     }
     return ok;
 }

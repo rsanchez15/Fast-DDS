@@ -93,11 +93,11 @@ protected:
      * Create a data reader, assigning its pointer to the associated implementation.
      * Don't use directly, create DataReader using create_datareader from Subscriber.
      */
-    RTPS_DllAPI DataReader(
+    DataReader(
             DataReaderImpl* impl,
             const StatusMask& mask = StatusMask::all());
 
-    RTPS_DllAPI DataReader(
+    DataReader(
             Subscriber* s,
             TopicDescription* topic,
             const DataReaderQos& qos,
@@ -109,7 +109,7 @@ public:
     /**
      * @brief Destructor.
      */
-    RTPS_DllAPI virtual ~DataReader();
+    virtual ~DataReader();
 
     /**
      * @brief This operation enables the DataReader.
@@ -130,6 +130,8 @@ public:
             const fastrtps::Duration_t& timeout);
 
     /**
+     * NOT YET IMPLEMENTED
+     *
      * @brief Method to block the current thread until an unread message is available.
      *
      * @param[in] max_wait Max blocking time for this operation.
@@ -813,6 +815,13 @@ public:
     RTPS_DllAPI const fastrtps::rtps::GUID_t& guid();
 
     /**
+     * Get associated GUID.
+     *
+     * @return Associated GUID
+     */
+    RTPS_DllAPI const fastrtps::rtps::GUID_t& guid() const;
+
+    /**
      * @brief Getter for the associated InstanceHandle.
      *
      * @return Copy of the InstanceHandle
@@ -824,7 +833,7 @@ public:
      *
      * @return TypeSupport associated to the DataReader.
      */
-    TypeSupport type();
+    RTPS_DllAPI TypeSupport type();
 
     /**
      * Get TopicDescription.
@@ -972,7 +981,7 @@ public:
      * @return RETCODE_OK
      */
     RTPS_DllAPI ReturnCode_t get_matched_publications(
-            std::vector<fastrtps::rtps::InstanceHandle_t>& publication_handles) const;
+            std::vector<InstanceHandle_t>& publication_handles) const;
 
     /**
      * @brief This operation creates a ReadCondition. The returned ReadCondition will be attached and belong to the
@@ -1033,10 +1042,13 @@ public:
     RTPS_DllAPI ReturnCode_t delete_contained_entities();
 
     /**
-     * Checks whether the sample is still valid or is corrupted
+     * Checks whether a loaned sample is still valid or is corrupted.
+     * Calling this method on a sample which has not been loaned, or one for which the loan has been returned
+     * yields undefined behavior.
      *
      * @param data Pointer to the sample data to check
      * @param info Pointer to the SampleInfo related to \c data
+     *
      * @return true if the sample is valid
      */
     RTPS_DllAPI bool is_sample_valid(
